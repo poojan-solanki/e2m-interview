@@ -10,3 +10,5 @@ wheels/
 .venv
 EXECUTION_GUIDE.md
 IMPLEMENTATION_PLAN.md
+sample_boq.json
+sample_report.html
