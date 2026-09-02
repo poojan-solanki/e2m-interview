@@ -1,14 +1,61 @@
-# Python-generated files
+# Python & Bytecode
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+*.egg
 
 # Virtual environments
-.venv
+.venv/
+env/
+venv/
+
+# Testing & Cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Model weights & Large binaries
+weights/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.ckpt
+FastSAM-s.pt
+yolo11n-seg.pt
+
+# Output directories
+output/
+output_*/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Logs & Temporary files
+*.log
+*.tmp
+scratch/
+
+# Temporary user review files & large sample copies
 EXECUTION_GUIDE.md
 IMPLEMENTATION_PLAN.md
 sample_boq.json
 sample_report.html
+samples/*copy*
+samples/*Copy*
+REMINDERS.md
+samples
+
+# Locally retained demo & test scripts
+backend/demo_segment.py
+backend/tests/test_segmentation.py
