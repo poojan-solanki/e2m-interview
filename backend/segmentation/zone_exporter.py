@@ -117,24 +117,35 @@ def export_segmentation_artifacts(
 
     artifacts = {}
 
-    # 1. Save individual binary masks
-    combined_renovation_mask = np.zeros((h, w), dtype=np.uint8)
-
+    # 1. Save individual binary masks and cache them in memory
+    zone_masks = {}
     for zone in result.zones:
         mask = draw_polygon_mask((w, h), zone.polygon)
         mask_filename = zone.mask_filename or f"{zone.id}_mask.png"
         mask_file_path = out_path / mask_filename
         cv2.imwrite(str(mask_file_path), mask)
         artifacts[f"mask_{zone.id}"] = str(mask_file_path)
+        zone_masks[zone.id] = mask
 
-        # Build combined inpaint mask: include renovatable surfaces, exclude protected openings
+    # 2. Build combined renovation inpaint mask using a strict 2-pass hierarchy
+    # Pass 1: Union all renovatable surfaces (walls, pillars, parapets)
+    combined_renovation_mask = np.zeros((h, w), dtype=np.uint8)
+    for zone in result.zones:
         if not zone.is_protected:
-            combined_renovation_mask = cv2.bitwise_or(combined_renovation_mask, mask)
-        else:
-            # Ensure windows and doors are strictly subtracted from the inpaint mask
-            combined_renovation_mask = cv2.bitwise_and(combined_renovation_mask, cv2.bitwise_not(mask))
+            combined_renovation_mask = cv2.bitwise_or(combined_renovation_mask, zone_masks[zone.id])
 
-    # 2. Save combined renovation mask for Phase 3 inpainting
+    # Pass 2: Strictly subtract all protected openings (windows, doors) so they CANNOT be overwritten by walls
+    kernel = np.ones((3, 3), np.uint8)
+    for zone in result.zones:
+        if zone.is_protected:
+            # Dilate opening mask slightly (2px) to protect external window frames & mullions
+            dilated_opening = cv2.dilate(zone_masks[zone.id], kernel, iterations=1)
+            combined_renovation_mask = cv2.bitwise_and(
+                combined_renovation_mask,
+                cv2.bitwise_not(dilated_opening),
+            )
+
+    # 3. Save combined renovation mask for Phase 3 inpainting
     inpaint_mask_path = out_path / "renovation_inpaint_mask.png"
     cv2.imwrite(str(inpaint_mask_path), combined_renovation_mask)
     artifacts["renovation_inpaint_mask"] = str(inpaint_mask_path)

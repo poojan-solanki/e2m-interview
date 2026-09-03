@@ -1,0 +1,1 @@
+uv run python backend/demo_render.py --image samples/image.png --material wpc_panels --style "contemporary architectural villa with vertical fluted dark teak wood louvers" --control-scale 0.5
