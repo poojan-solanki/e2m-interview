@@ -64,3 +64,20 @@ sample_report.html
 # Ad-hoc test photo copies dropped in locally (not the documented samples/ assets)
 samples/*copy*
 samples/*Copy*
+
+# Interview repo: only frontend/, backend/, sample_outputs/ are tracked upstream.
+# Docs, planning notes, and dev-only tooling config stay local — untracked, not
+# deleted (see git history at 41c0037 if any of this needs to be recovered).
+/.dockerignore
+/.mcp.json
+/.python-version
+/CLAUDE.md
+/Dockerfile
+/EXECUTION_GUIDE.md
+/IMPLEMENTATION_PLAN.md
+/PHASE_3_OPTIMIZATION_TESTING_GUIDE.md
+/README.md
+/REMINDERS.md
+/SESSION_HANDOVER.md
+/main.py
+/samples/
