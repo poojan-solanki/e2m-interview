@@ -2,6 +2,27 @@
 
 ![Sample house exterior](sample_outputs/image.png)
 
+## Models Used
+
+- **[Meta SAM 3](https://ai.meta.com/sam3/)** (Segment Anything Model 3) — segments the uploaded house photo into individual architectural zones: walls, windows, balconies, pillars, railings, roof parapet, and gate.
+- **Stable Diffusion (Inpainting)** — generates the new material texture, painted only within the unlocked (renovatable) mask region for each zone.
+- **ControlNet (Canny edge guidance)** — extracts a structural edge map from the original photo and conditions the diffusion model on it, so the render keeps the house's true geometry instead of drifting from it, while a strict pixel-lock guarantees protected regions (windows, doors, sky, vehicles, people) are pasted back from the original photo untouched — a 100% mathematical guarantee, not a soft constraint.
+
+### Pipeline
+
+<table>
+<tr>
+<td align="center"><b>1. Original Photo</b></td>
+<td align="center"><b>2. ControlNet Canny Edge Map</b></td>
+<td align="center"><b>3. AI-Rendered Result</b></td>
+</tr>
+<tr>
+<td><img src="sample_outputs/house_1/image.png" width="260"></td>
+<td><img src="sample_outputs/house_1/control_canny.png" width="260"></td>
+<td><img src="sample_outputs/house_1/house_redesigned_wpc_panels.png" width="260"></td>
+</tr>
+</table>
+
 An end-to-end computer-vision and generative AI platform for residential facade renovations. Homeowners and civil contractors upload an exterior house photo, and the system:
 1. **Perceives Architectural Structure**: Automatically identifies walls, windows, balconies, porch pillars, and roof trims using **Meta SAM 3** (Segment Anything Model 3).
 2. **Guarantees Protected Openings**: Isolates glass windows, vehicles, and workers, strictly locking them so paint, tiles, or stone are never erroneously rendered over them.
