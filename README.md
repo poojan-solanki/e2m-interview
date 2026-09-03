@@ -1,5 +1,7 @@
 # AI-Based Exterior House Renovation & Cost Estimation System
 
+![Sample house exterior](sample_outputs/image.png)
+
 An end-to-end computer-vision and generative AI platform for residential facade renovations. Homeowners and civil contractors upload an exterior house photo, and the system:
 1. **Perceives Architectural Structure**: Automatically identifies walls, windows, balconies, porch pillars, and roof trims using **Meta SAM 3** (Segment Anything Model 3).
 2. **Guarantees Protected Openings**: Isolates glass windows, vehicles, and workers, strictly locking them so paint, tiles, or stone are never erroneously rendered over them.
