@@ -6,13 +6,20 @@ import { cn } from "@/lib/utils";
 
 const STEPS: { n: WizardStep; label: string }[] = [
   { n: 1, label: "Upload" },
-  { n: 2, label: "Zones" },
-  { n: 3, label: "Materials" },
-  { n: 4, label: "Compare" },
-  { n: 5, label: "Quote" },
+  { n: 2, label: "Zones & Materials" },
+  { n: 3, label: "Compare" },
+  { n: 4, label: "Quote" },
 ];
 
-export default function StudioHeader({ currentStep }: { currentStep: WizardStep }) {
+export default function StudioHeader({
+  currentStep,
+  maxStepReached,
+  onStepClick,
+}: {
+  currentStep: WizardStep;
+  maxStepReached: WizardStep;
+  onStepClick: (step: WizardStep) => void;
+}) {
   return (
     <div className="sticky top-0 z-20 flex items-center justify-between px-10 h-[76px] bg-gradient-to-b from-[#161920]/85 to-[#0e1015]/70 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_32px_rgba(0,0,0,0.28)]">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/35 to-transparent" />
@@ -33,10 +40,19 @@ export default function StudioHeader({ currentStep }: { currentStep: WizardStep 
       <div className="flex items-center gap-0 py-2 px-4.5 rounded-full bg-white/[0.035] border border-white/[0.07]">
         {STEPS.map((s, i) => {
           const active = s.n === currentStep;
-          const done = s.n < currentStep;
+          const done = s.n <= maxStepReached && s.n !== currentStep;
+          const reachable = s.n <= maxStepReached;
           return (
             <div key={s.n} className="flex items-center">
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!reachable || active}
+                onClick={() => onStepClick(s.n)}
+                className={cn(
+                  "flex items-center gap-2 rounded-full",
+                  reachable && !active ? "cursor-pointer" : "cursor-default"
+                )}
+              >
                 <div
                   className={cn(
                     "font-display w-[25px] h-[25px] rounded-full flex items-center justify-center text-[12px] font-semibold border transition-colors",
@@ -60,7 +76,7 @@ export default function StudioHeader({ currentStep }: { currentStep: WizardStep 
                 >
                   {s.label}
                 </span>
-              </div>
+              </button>
               {i < STEPS.length - 1 && (
                 <div className={cn("w-7 h-px mx-2.5", done ? "bg-accent" : "bg-white/15")} />
               )}

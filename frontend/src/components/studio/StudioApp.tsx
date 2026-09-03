@@ -1,22 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { RateOverride, SampleHouse, StudioState, WizardStep } from "@/types";
 import StudioHeader from "./StudioHeader";
 import Step1Upload from "./steps/Step1Upload";
 import Step2Zones from "./steps/Step2Zones";
-import Step3Materials from "./steps/Step3Materials";
 import Step4Comparison from "./steps/Step4Comparison";
 import Step5BoQ from "./steps/Step5BoQ";
 
 const initialState: StudioState = {
   step: 1,
+  maxStepReached: 1,
   house: null,
-  selectedZoneId: null,
+  activeMaterialId: null,
   assignments: {},
   rateOverrides: {},
   activeMaterialTab: "instant",
+  renderedImageSrc: null,
 };
 
 const STEP_VARIANTS = {
@@ -28,23 +29,20 @@ const STEP_VARIANTS = {
 export default function StudioApp() {
   const [state, setState] = useState<StudioState>(initialState);
 
-  const goToStep = (step: WizardStep) => setState((s) => ({ ...s, step }));
+  // Used by "Continue"/"Next" buttons — always allowed, and unlocks that step (and
+  // its header pip) for the rest of the session.
+  const advanceToStep = (step: WizardStep) =>
+    setState((s) => ({ ...s, step, maxStepReached: (Math.max(s.maxStepReached, step) as WizardStep) }));
+
+  // Used by "Back" buttons and clicking a header step pip — only allowed to jump to
+  // a step already reached, and never changes what's unlocked.
+  const goToStep = (step: WizardStep) => setState((s) => (step <= s.maxStepReached ? { ...s, step } : s));
 
   const loadHouse = (house: SampleHouse) => {
-    // Start on the largest assignable surface (typically the main wall) rather than
-    // whichever zone happens to be first in segmentation order.
-    const heroZone = house.zones
-      .filter((z) => !z.isProtected)
-      .sort((a, b) => Math.max(b.netAreaSqft, b.runningFeet) - Math.max(a.netAreaSqft, a.runningFeet))[0];
-    setState((s) => ({
-      ...s,
-      house,
-      step: 2,
-      selectedZoneId: heroZone?.id ?? null,
-    }));
+    setState((s) => ({ ...s, house, step: 2, maxStepReached: 2, activeMaterialId: null }));
   };
 
-  const selectZone = (zoneId: string | null) => setState((s) => ({ ...s, selectedZoneId: zoneId }));
+  const setActiveMaterial = (materialId: string | null) => setState((s) => ({ ...s, activeMaterialId: materialId }));
 
   const assignMaterial = (zoneIds: string[], materialId: string) =>
     setState((s) => ({
@@ -54,6 +52,13 @@ export default function StudioApp() {
         ...Object.fromEntries(zoneIds.map((id) => [id, materialId])),
       },
     }));
+
+  const unassignZone = (zoneId: string) =>
+    setState((s) => {
+      const next = { ...s.assignments };
+      delete next[zoneId];
+      return { ...s, assignments: next };
+    });
 
   const setRateOverride = (zoneIds: string[], override: RateOverride) =>
     setState((s) => ({
@@ -66,9 +71,14 @@ export default function StudioApp() {
 
   const setMaterialTab = (tab: "instant" | "ai") => setState((s) => ({ ...s, activeMaterialTab: tab }));
 
+  const setRenderedImage = useCallback(
+    (src: string | null) => setState((s) => (s.renderedImageSrc === src ? s : { ...s, renderedImageSrc: src })),
+    []
+  );
+
   return (
     <div className="min-h-screen bg-bg">
-      <StudioHeader currentStep={state.step} />
+      <StudioHeader currentStep={state.step} maxStepReached={state.maxStepReached} onStepClick={goToStep} />
       <AnimatePresence mode="wait">
         <motion.div
           key={state.step}
@@ -82,36 +92,34 @@ export default function StudioApp() {
           {state.step === 2 && state.house && (
             <Step2Zones
               house={state.house}
-              selectedZoneId={state.selectedZoneId}
+              activeMaterialId={state.activeMaterialId}
               assignments={state.assignments}
-              onSelectZone={selectZone}
-              onNext={() => goToStep(3)}
+              onSetActiveMaterial={setActiveMaterial}
+              onAssignMaterial={assignMaterial}
+              onUnassignZone={unassignZone}
+              onBack={() => goToStep(1)}
+              onNext={() => advanceToStep(3)}
             />
           )}
           {state.step === 3 && state.house && (
-            <Step3Materials
-              house={state.house}
-              selectedZoneId={state.selectedZoneId}
-              assignments={state.assignments}
-              onAssignMaterial={assignMaterial}
-              onNext={() => goToStep(4)}
-            />
-          )}
-          {state.step === 4 && state.house && (
             <Step4Comparison
               house={state.house}
               assignments={state.assignments}
               activeTab={state.activeMaterialTab}
               onTabChange={setMaterialTab}
-              onNext={() => goToStep(5)}
+              onRenderedImageChange={setRenderedImage}
+              onBack={() => goToStep(2)}
+              onNext={() => advanceToStep(4)}
             />
           )}
-          {state.step === 5 && state.house && (
+          {state.step === 4 && state.house && (
             <Step5BoQ
               house={state.house}
               assignments={state.assignments}
               rateOverrides={state.rateOverrides}
               onRateOverride={setRateOverride}
+              renderedImageSrc={state.renderedImageSrc}
+              onBack={() => goToStep(3)}
             />
           )}
         </motion.div>

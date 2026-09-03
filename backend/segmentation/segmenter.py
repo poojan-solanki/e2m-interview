@@ -62,6 +62,7 @@ ARCHITECTURAL_CONCEPTS = [
     "balcony",
     "porch column",
     "roof overhang",
+    "gate",
     "person",
     "car",
 ]
@@ -109,6 +110,13 @@ CONCEPT_MAPPING = {
         "category": "surface",
         "protected": False,
         "materials": ["weatherproof_paint", "stone_cladding"],
+    },
+    "gate": {
+        "label": "gate",
+        "display_prefix": "Gate",
+        "category": "surface",
+        "protected": False,
+        "materials": ["metal_railing", "weatherproof_paint"],
     },
     "person": {
         "label": "person",
@@ -373,7 +381,7 @@ class FacadeSegmenter:
         raw_zones = []
 
         # Priority order for zone extraction
-        eval_order = ["window", "balcony", "porch column", "roof overhang", "exterior wall"]
+        eval_order = ["window", "balcony", "porch column", "roof overhang", "gate", "exterior wall"]
 
         # First union masks for each category to eliminate redundant overlapping detections
         concept_combined_masks = {}

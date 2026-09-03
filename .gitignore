@@ -33,6 +33,17 @@ yolo11n-seg.pt
 output/
 output_*/
 
+# Live user uploads processed by POST /api/segment — ephemeral per-request
+# artifacts (source photo + inpaint mask), not real deliverables. Distinct
+# from the historical .gitignore mistake in SESSION_HANDOVER.md §4.
+backend/uploads/
+
+# Secrets — Supabase keys etc, never commit
+.env
+.env.*
+!.env.example
+backend/.env
+
 # IDE & Editor files
 .vscode/
 .idea/

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Lock } from "lucide-react";
+import { ChevronLeft, Download, Lock } from "lucide-react";
 import { fetchBoQ } from "@/lib/api";
 import { formatINR, groupBoQItems } from "@/lib/boq";
 import type { BoQSummary, RateOverride, SampleHouse } from "@/types";
@@ -13,6 +13,7 @@ const ZONE_COLORS: Record<string, string> = {
   balcony_railing: "#8b5cf6",
   roof_parapet: "#f43f5e",
   window: "#3b82f6",
+  gate: "#e11d48",
 };
 
 const EMPTY_SUMMARY: BoQSummary = {
@@ -30,11 +31,15 @@ export default function Step5BoQ({
   assignments,
   rateOverrides,
   onRateOverride,
+  renderedImageSrc,
+  onBack,
 }: {
   house: SampleHouse;
   assignments: Record<string, string>;
   rateOverrides: Record<string, RateOverride>;
   onRateOverride: (zoneIds: string[], override: RateOverride) => void;
+  renderedImageSrc: string | null;
+  onBack: () => void;
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [summary, setSummary] = useState<BoQSummary>(EMPTY_SUMMARY);
@@ -93,9 +98,18 @@ export default function Step5BoQ({
 
       <div className="relative z-10 flex gap-6 p-8">
         <div className="flex-1 flex flex-col gap-5">
-          <div>
-            <div className="font-display text-[20px] font-semibold text-text">Bill of Quantities</div>
-            <div className="text-[12px] text-[#64748b] mt-1">Ahmedabad market rates &middot; editable below</div>
+          <div className="flex items-center gap-3.5">
+            <button
+              type="button"
+              onClick={onBack}
+              className="py-2.5 px-3.5 rounded-[12px] border border-white/15 bg-white/4 text-text-muted hover:text-text hover:bg-white/7 transition-colors flex items-center justify-center flex-none"
+            >
+              <ChevronLeft size={16} strokeWidth={2.2} />
+            </button>
+            <div>
+              <div className="font-display text-[20px] font-semibold text-text">Bill of Quantities</div>
+              <div className="text-[12px] text-[#64748b] mt-1">Ahmedabad market rates &middot; editable below</div>
+            </div>
           </div>
 
           {displayLoadError && (
@@ -239,7 +253,13 @@ export default function Step5BoQ({
       </div>
 
       {reportOpen && (
-        <ReportModal house={house} summary={displaySummary} groups={groups} onClose={() => setReportOpen(false)} />
+        <ReportModal
+          house={house}
+          summary={displaySummary}
+          groups={groups}
+          afterSrc={renderedImageSrc ?? house.imageSrc}
+          onClose={() => setReportOpen(false)}
+        />
       )}
     </div>
   );

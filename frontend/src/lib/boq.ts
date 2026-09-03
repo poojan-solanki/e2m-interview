@@ -10,6 +10,7 @@ export const LABEL_PLURAL: Record<string, string> = {
   roof_parapet: "Roof Parapets",
   window: "Windows",
   door: "Doors",
+  gate: "Gates",
 };
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

@@ -21,6 +21,7 @@ ZONE_COLORS = {
     "window": (180, 105, 255),         # Hot Pink / Magenta (Protected opening)
     "door": (147, 20, 255),            # Deep Magenta (Protected opening)
     "roof_parapet": (30, 200, 100),    # Green (roof overhang / chhajja)
+    "gate": (60, 76, 231),              # Crimson (entrance gate)
     "person": (0, 0, 255),             # Red (protected human)
     "car": (120, 120, 120),            # Grey (foreground)
     "surface": (200, 200, 200),        # Neutral grey

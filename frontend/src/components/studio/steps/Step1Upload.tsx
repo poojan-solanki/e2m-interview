@@ -1,21 +1,68 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Image from "next/image";
-import { UploadCloud } from "lucide-react";
-import { HOUSE_1 } from "@/data/sampleHouse1";
-import type { SampleHouse } from "@/types";
+import { AlertCircle, Loader2, Sparkles, UploadCloud } from "lucide-react";
+import { segmentUpload } from "@/lib/api";
+import type { SampleHouse, ZoneCategory } from "@/types";
 
 export default function Step1Upload({ onSelectHouse }: { onSelectHouse: (house: SampleHouse) => void }) {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = (files: FileList | null) => {
     const file = files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
+    setUploadFile(file);
+    setErrorMsg(null);
     const reader = new FileReader();
     reader.onload = (e) => setUploadPreview(e.target?.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const handleAnalyze = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!uploadFile || !uploadPreview) return;
+    setAnalyzing(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await segmentUpload(uploadFile);
+      const uploadedHouse: SampleHouse = {
+        id: res.houseId,
+        name: uploadFile.name.replace(/\.[^/.]+$/, "") || "Uploaded Facade",
+        imageSrc: uploadPreview,
+        imageWidth: res.imageWidth,
+        imageHeight: res.imageHeight,
+        totalGrossWallAreaSqft: res.totalGrossWallAreaSqft,
+        netPaintableWallAreaSqft: res.netPaintableWallAreaSqft,
+        renderPreviews: {},
+        zones: res.zones.map((z) => ({
+          id: z.id,
+          label: z.label,
+          displayName: z.displayName,
+          category: z.category as ZoneCategory,
+          isProtected: z.isProtected,
+          confidence: z.confidence,
+          polygon: z.polygon,
+          bbox: z.bbox,
+          pixelArea: z.pixelArea,
+          grossAreaSqft: z.grossAreaSqft,
+          deductionsSqft: z.deductionsSqft,
+          netAreaSqft: z.netAreaSqft,
+          runningFeet: z.runningFeet,
+          recommendedMaterials: z.recommendedMaterials,
+        })),
+      };
+      onSelectHouse(uploadedHouse);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to analyze photo. Please try again.";
+      setErrorMsg(msg);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   return (
@@ -63,10 +110,46 @@ export default function Step1Upload({ onSelectHouse }: { onSelectHouse: (house: 
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={uploadPreview} alt="Your upload" className="w-full h-full object-cover" />
               </div>
-              <div className="text-[13px] text-text-muted">
-                Looks great. Continue with the sample house below to see the full detection &amp;
-                costing flow &mdash; live segmentation on your own photo lands in Phase 5.
-              </div>
+
+              {errorMsg && (
+                <div className="w-full flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-300 text-[13px] text-left">
+                  <AlertCircle size={18} className="shrink-0 text-red-400" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {analyzing ? (
+                <div className="flex flex-col items-center gap-2.5 py-3">
+                  <div className="flex items-center gap-2 text-accent text-[14px] font-medium">
+                    <Loader2 size={18} className="animate-spin text-accent" />
+                    Analyzing architecture with Meta SAM 3...
+                  </div>
+                  <div className="text-[12px] text-text-muted">
+                    Detecting walls, windows, balconies, roof overhangs &amp; spatial scale...
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2.5 w-full mt-1">
+                  <button
+                    type="button"
+                    onClick={handleAnalyze}
+                    className="font-display w-full py-3.5 px-7 rounded-[13px] border border-white/25 bg-gradient-to-br from-[#ddc4a1] via-accent to-[#b8956d] text-[#241a0c] text-[15px] font-semibold shadow-[0_12px_28px_rgba(200,168,130,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] flex items-center justify-center gap-2 hover:brightness-105 transition"
+                  >
+                    <Sparkles size={18} />
+                    Analyze &amp; Renovate This House
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      inputRef.current?.click();
+                    }}
+                    className="text-[12px] text-text-muted hover:text-white transition"
+                  >
+                    Choose a different photo
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -88,30 +171,6 @@ export default function Step1Upload({ onSelectHouse }: { onSelectHouse: (house: 
             </>
           )}
         </div>
-
-        <div className="my-9 flex items-center gap-3.5 text-[12px] tracking-[0.08em] text-[#475569] uppercase">
-          <div className="w-14 h-px bg-gradient-to-r from-transparent to-white/16" />
-          or try a sample house
-          <div className="w-14 h-px bg-gradient-to-l from-transparent to-white/16" />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onSelectHouse(HOUSE_1)}
-          className="w-[420px] rounded-[20px] overflow-hidden bg-gradient-to-br from-white/7 to-white/2 backdrop-blur-xl border border-white/12 shadow-[0_16px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] text-left"
-        >
-          <div className="relative w-full h-[210px]">
-            <Image src={HOUSE_1.imageSrc} alt={HOUSE_1.name} fill className="object-cover" />
-          </div>
-          <div className="p-4.5">
-            <div className="text-[14px] font-semibold text-text mb-1">
-              Sample House &mdash; {HOUSE_1.name}
-            </div>
-            <div className="text-[12px] text-[#64748b]">
-              {HOUSE_1.zones.length} zones detected &middot; ready to render
-            </div>
-          </div>
-        </button>
 
         <div className="mt-14 text-[11px] tracking-[0.10em] text-[#3d4451] uppercase">
           SAM 3 structural detection &nbsp;&middot;&nbsp; ControlNet material rendering &nbsp;&middot;&nbsp; IS

@@ -9,16 +9,15 @@ export default function ReportModal({
   house,
   summary,
   groups,
+  afterSrc,
   onClose,
 }: {
   house: SampleHouse;
   summary: BoQSummary;
   groups: BoQGroup[];
+  afterSrc: string;
   onClose: () => void;
 }) {
-  const afterSrc =
-    Object.values(house.renderPreviews).find(Boolean) ?? house.imageSrc;
-
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-10 print:bg-white print:py-0">
       <div

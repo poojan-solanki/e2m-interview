@@ -11,6 +11,7 @@ const ZONE_COLORS: Record<string, string> = {
   roof_parapet: "#f43f5e",
   window: "#3b82f6",
   door: "#3b82f6",
+  gate: "#e11d48",
 };
 
 function isPointInPolygon(px: number, py: number, polygon: [number, number][]): boolean {
@@ -29,7 +30,7 @@ export default function ZoneCanvas({
   imageWidth,
   imageHeight,
   zones,
-  selectedZoneId,
+  activeMaterialId,
   assignments,
   onZoneClick,
 }: {
@@ -37,7 +38,9 @@ export default function ZoneCanvas({
   imageWidth: number;
   imageHeight: number;
   zones: Zone[];
-  selectedZoneId: string | null;
+  /** Paint-bucket model: the material currently "loaded" — compatible unpainted
+   * zones pulse to invite a click, incompatible ones dim. Null = nothing active. */
+  activeMaterialId: string | null;
   assignments: Record<string, string>;
   onZoneClick: (zoneId: string) => void;
 }) {
@@ -47,6 +50,7 @@ export default function ZoneCanvas({
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 900, h: 675 });
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const pulseRef = useRef(0);
 
   useEffect(() => {
     const img = new window.Image();
@@ -71,6 +75,10 @@ export default function ZoneCanvas({
 
   const scale = canvasSize.w / imageWidth;
 
+  function isCompatible(zone: Zone): boolean {
+    return !!activeMaterialId && zone.recommendedMaterials.includes(activeMaterialId);
+  }
+
   function draw() {
     const canvas = canvasRef.current;
     const img = imgRef.current;
@@ -83,10 +91,13 @@ export default function ZoneCanvas({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+    const pulse = 0.5 + 0.5 * Math.sin(pulseRef.current / 420);
+
     for (const zone of zones) {
-      const isSelected = zone.id === selectedZoneId;
       const isHovered = zone.id === hoveredZoneId;
       const assignedMaterialId = assignments[zone.id];
+      const compatible = isCompatible(zone);
+      const dimmed = !!activeMaterialId && !compatible && !assignedMaterialId;
       const color = assignedMaterialId
         ? getMaterial(assignedMaterialId).swatchColor
         : ZONE_COLORS[zone.label] ?? "#94a3b8";
@@ -109,16 +120,46 @@ export default function ZoneCanvas({
         continue;
       }
 
-      const fillAlpha = isSelected ? 0.45 : isHovered ? 0.3 : assignedMaterialId ? 0.32 : 0.16;
+      let fillAlpha = isHovered ? 0.32 : assignedMaterialId ? 0.32 : 0.14;
+      let lineWidth = isHovered ? 2.2 : 1.25;
+      let strokeColor = color;
+
+      if (compatible && !assignedMaterialId) {
+        // Pulsing invitation to paint — compatible with the active material, empty.
+        fillAlpha = 0.14 + pulse * 0.22;
+        lineWidth = 1.6 + pulse * 1.1;
+        strokeColor = getMaterial(activeMaterialId!).swatchColor;
+      } else if (dimmed) {
+        fillAlpha = 0.05;
+        lineWidth = 1;
+      }
+
       ctx.fillStyle = hexToRgba(color, fillAlpha);
       ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2 : 1.25;
+      ctx.strokeStyle = dimmed ? "rgba(148,163,184,0.25)" : strokeColor;
+      ctx.lineWidth = lineWidth;
+      ctx.globalAlpha = dimmed ? 0.5 : 1;
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 
   useEffect(draw);
+
+  // Only animate (rAF loop) while a material is active and there's something left
+  // to paint with it — otherwise the canvas just redraws once and sits still.
+  useEffect(() => {
+    if (!activeMaterialId) return;
+    let raf: number;
+    const tick = (t: number) => {
+      pulseRef.current = t;
+      draw();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMaterialId, canvasSize]);
 
   function zoneAtPoint(clientX: number, clientY: number): Zone | null {
     const canvas = canvasRef.current;
@@ -135,6 +176,19 @@ export default function ZoneCanvas({
   }
 
   const hoveredZone = zones.find((z) => z.id === hoveredZoneId);
+  const hoveredCompatible = hoveredZone ? isCompatible(hoveredZone) : false;
+  const hoveredAssigned = hoveredZone ? assignments[hoveredZone.id] : undefined;
+
+  let hoverHint = "";
+  if (hoveredZone) {
+    if (!activeMaterialId) {
+      hoverHint = hoveredAssigned ? "click to remove this material" : "pick a material first";
+    } else if (hoveredCompatible) {
+      hoverHint = hoveredAssigned === activeMaterialId ? "click to remove" : "click to paint";
+    } else {
+      hoverHint = "not used for this zone type";
+    }
+  }
 
   return (
     <div
@@ -178,7 +232,7 @@ export default function ZoneCanvas({
             {hoveredZone.category === "railing"
               ? `${hoveredZone.runningFeet.toFixed(1)} Rft`
               : `${hoveredZone.netAreaSqft.toFixed(1)} sq ft`}{" "}
-            &middot; click to assign material
+            &middot; {hoverHint}
           </div>
         </div>
       )}
