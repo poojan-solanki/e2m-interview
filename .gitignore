@@ -46,16 +46,10 @@ Thumbs.db
 *.tmp
 scratch/
 
-# Temporary user review files & large sample copies
-EXECUTION_GUIDE.md
-IMPLEMENTATION_PLAN.md
+# Generated review artifacts (not source)
 sample_boq.json
 sample_report.html
+
+# Ad-hoc test photo copies dropped in locally (not the documented samples/ assets)
 samples/*copy*
 samples/*Copy*
-REMINDERS.md
-samples
-
-# Locally retained demo & test scripts
-backend/demo_segment.py
-backend/tests/test_segmentation.py
