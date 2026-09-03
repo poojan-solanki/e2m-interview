@@ -11,6 +11,8 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **REM-001** | `sample_report.html` & `sample_boq.json` in workspace root | Clean-up | Phase 1 (Initial Test) | 🟡 **Pending User Review** | You kept these files to test and inspect the generated contractor report and JSON. Delete or move them once you're satisfied with your testing. |
 | **REM-002** | Docker Production Build & Missing Libraries | Deployment | Phase 2 (SAM 3 Setup) | 🟢 **Documented & Configured** | Dockerfile builds SAM 3 with PyTorch CUDA runtime, volume mounts for weights/output, and required libraries. |
+| **REM-003** | **Disk / Hash Mask Caching (SHA-256)** | Optimization | Phase 3 (Post-Optimization) | 🟡 **Scheduled for Phase 5** | Compute SHA-256 hash of uploaded photos to cache `output/cache/<hash>/renovation_inpaint_mask.png` and `zones.json`. Drops re-render segmentation time to **0 ms** when user previews multiple materials on the same house. |
+| **REM-004** | **Database Integration (Images & Segmentation Metadata)** | Persistence | Phase 3 (Post-Optimization) | 🟡 **Scheduled for Phase 5** | Integrate persistent relational database (SQLite / PostgreSQL / Supabase) during Phase 5 (Integration Layer) to store images, masks, zone polygons, and BoQ records. Deferred after Phase 4 to avoid premature schema locking. |
 
 ---
 
@@ -47,7 +49,9 @@
   - [ ] Dynamic BoQ table with live rate overrides
   - [ ] Dark/Light theme toggle with architectural palette
 
-- [ ] **Phase 5: Integration & PDF Export**
+- [ ] **Phase 5: Integration, Database & PDF Export**
+  - [ ] Database integration (store projects, uploaded images, segmentation masks, and BoQ records)
+  - [ ] SHA-256 Disk/Hash Mask Caching (0ms segmentation reuse on re-renders)
   - [ ] FastAPI REST endpoints
   - [ ] Asynchronous rendering task handling
   - [ ] Downloadable contractor PDF report generation

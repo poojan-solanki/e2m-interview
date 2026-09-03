@@ -58,6 +58,7 @@ else:
 ARCHITECTURAL_CONCEPTS = [
     "window",
     "exterior wall",
+    "building facade",
     "balcony",
     "porch column",
     "roof overhang",
@@ -75,6 +76,13 @@ CONCEPT_MAPPING = {
         "materials": [],
     },
     "exterior wall": {
+        "label": "wall",
+        "display_prefix": "Wall",
+        "category": "surface",
+        "protected": False,
+        "materials": ["weatherproof_paint", "textured_stucco", "vitrified_tiles", "wpc_panels"],
+    },
+    "building facade": {
         "label": "wall",
         "display_prefix": "Wall",
         "category": "surface",
@@ -369,7 +377,7 @@ class FacadeSegmenter:
 
         # First union masks for each category to eliminate redundant overlapping detections
         concept_combined_masks = {}
-        for prompt in eval_order:
+        for prompt in prompt_outputs:
             if prompt not in prompt_outputs:
                 continue
             masks_np, scores_np = prompt_outputs[prompt]
@@ -383,9 +391,15 @@ class FacadeSegmenter:
         window_mask = cv2.bitwise_and(window_mask, cv2.bitwise_not(car_mask))
         concept_combined_masks["window"] = window_mask
 
-        # Clean wall: subtract foreground, windows, and accent features
+        # Clean wall: union exterior wall and building facade to handle both finished houses and raw masonry/commercial facades
+        wall_raw = np.zeros((inf_h, inf_w), dtype=np.uint8)
         if "exterior wall" in concept_combined_masks:
-            wall_clean = concept_combined_masks["exterior wall"]
+            wall_raw = cv2.bitwise_or(wall_raw, concept_combined_masks["exterior wall"])
+        if "building facade" in concept_combined_masks:
+            wall_raw = cv2.bitwise_or(wall_raw, concept_combined_masks["building facade"])
+
+        if np.sum(wall_raw > 0) > 0:
+            wall_clean = wall_raw
             wall_clean = cv2.bitwise_and(wall_clean, cv2.bitwise_not(foreground_exclusion))
             wall_clean = cv2.bitwise_and(wall_clean, cv2.bitwise_not(window_mask))
             # Also subtract balcony and pillar from wall

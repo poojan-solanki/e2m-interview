@@ -11,6 +11,7 @@ from .material_prompter import (
     MATERIAL_PROMPT_CONFIGS,
 )
 from .before_after_exporter import generate_before_after_comparison
+from .instant_preview import render_instant_preview, PreviewResult
 from .inpainter import (
     FacadeInpainter,
     RenderResult,
@@ -24,6 +25,8 @@ __all__ = [
     "list_supported_materials",
     "MATERIAL_PROMPT_CONFIGS",
     "generate_before_after_comparison",
+    "render_instant_preview",
+    "PreviewResult",
     "FacadeInpainter",
     "RenderResult",
     "apply_pixel_lock",

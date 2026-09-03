@@ -159,3 +159,85 @@ def test_before_after_comparison_dimensions_and_divider(tmp_path):
     center_x = 300 + (divider_w // 2)
     # Warm white divider: (245, 240, 235)
     assert np.all(comp_np[:, center_x] == (245, 240, 235))
+
+
+# -------------------------------------------------------------------------
+# 6. Tier-1 Instant Procedural Preview Tests (Dual-Tier Optimization)
+# -------------------------------------------------------------------------
+
+def test_instant_preview_all_materials():
+    """Verify instant procedural preview generates valid PIL images for all catalog materials."""
+    from backend.renderer.instant_preview import (
+        render_instant_preview,
+        MATERIAL_PREVIEW_PALETTES,
+        PreviewResult,
+    )
+    w, h = 320, 240
+    orig = Image.new("RGB", (w, h), (200, 200, 200))
+    mask = Image.new("L", (w, h), 255)
+
+    for mat_id in MATERIAL_PREVIEW_PALETTES.keys():
+        res = render_instant_preview(orig, mask, material_id=mat_id)
+        assert isinstance(res, PreviewResult)
+        assert res.preview_image.size == (w, h)
+        assert res.preview_image.mode == "RGB"
+        assert res.execution_time_ms < 500  # Sub-500ms even on cold CPU
+        assert res.material_id == mat_id
+
+
+def test_instant_preview_pixel_lock():
+    """Verify that protected regions (mask=0) in instant preview are 100% byte-identical to original."""
+    from backend.renderer.instant_preview import render_instant_preview
+
+    w, h = 100, 100
+    orig_np = np.zeros((h, w, 3), dtype=np.uint8)
+    orig_np[:, :] = (12, 34, 56)  # Unique color
+    orig = Image.fromarray(orig_np)
+
+    mask_np = np.full((h, w), 255, dtype=np.uint8)
+    mask_np[20:60, 20:60] = 0  # Protected element (e.g. window)
+    mask = Image.fromarray(mask_np)
+
+    res = render_instant_preview(orig, mask, material_id="stone_cladding")
+    res_np = np.array(res.preview_image)
+
+    # Protected region must strictly equal (12, 34, 56)
+    protected_crop = res_np[20:60, 20:60]
+    expected = np.zeros_like(protected_crop)
+    expected[:, :] = (12, 34, 56)
+    assert np.array_equal(protected_crop, expected)
+
+    # Renovated region should have received new texture
+    renovated_crop = res_np[0:15, 0:15]
+    assert not np.array_equal(renovated_crop, orig_np[0:15, 0:15])
+
+
+def test_instant_preview_custom_palette():
+    """Verify instant preview accepts custom BGR palette override."""
+    from backend.renderer.instant_preview import render_instant_preview
+
+    w, h = 50, 50
+    orig = Image.new("RGB", (w, h), (200, 200, 200))
+    mask = Image.new("L", (w, h), 255)
+
+    custom_bgr = (255, 10, 10)
+    res = render_instant_preview(orig, mask, material_id="weatherproof_paint", custom_bgr=custom_bgr)
+    assert res.preview_image.size == (w, h)
+
+
+def test_facade_inpainter_optimization_attributes():
+    """Verify FacadeInpainter initializes with low VRAM and optimization flags without loading weights."""
+    from backend.renderer.inpainter import FacadeInpainter
+
+    inpainter = FacadeInpainter(low_vram_mode=True)
+    assert inpainter.low_vram_mode is True
+    assert inpainter.pipe is None  # Weights are lazily loaded on demand
+
+    # Verify render_preview delegation works without loading diffusion model
+    w, h = 60, 60
+    orig = Image.new("RGB", (w, h), (180, 180, 180))
+    mask = Image.new("L", (w, h), 255)
+    prev = inpainter.render_preview(orig, mask, material_id="textured_stucco")
+    assert prev.preview_image.size == (w, h)
+    assert inpainter.pipe is None  # Still unloaded!
+

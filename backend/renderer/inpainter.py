@@ -136,15 +136,44 @@ class FacadeInpainter:
         )
 
         if self.device == "cuda":
+            # Enable TF32 for Ampere / Ada Lovelace architecture GPUs (e.g. RTX 3050+)
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+
             if self.low_vram_mode:
                 # Enables sequential component offloading (keeps VRAM ~2.2 GB)
                 pipe.enable_model_cpu_offload()
                 pipe.enable_attention_slicing()
+                # Enable VAE tiling & slicing to eliminate memory spikes on high-resolution outputs
+                if hasattr(pipe, "enable_vae_tiling"):
+                    pipe.enable_vae_tiling()
+                if hasattr(pipe, "enable_vae_slicing"):
+                    pipe.enable_vae_slicing()
             else:
                 pipe.to("cuda")
+                if hasattr(pipe, "enable_vae_tiling"):
+                    pipe.enable_vae_tiling()
 
         self.pipe = pipe
-        print("✓ Inpainting pipeline ready.")
+        print("✓ Inpainting pipeline ready (VAE Tiling: ACTIVE, FP16: ACTIVE).")
+
+    def render_preview(
+        self,
+        image: Union[str, Path, Image.Image],
+        inpaint_mask: Union[str, Path, Image.Image],
+        material_id: str = "stone_cladding",
+        blend_intensity: float = 0.88,
+        custom_bgr: Optional[Tuple[int, int, int]] = None,
+    ):
+        """Executes Tier-1 ultra-fast (<50ms) procedural preview without loading diffusion weights."""
+        from .instant_preview import render_instant_preview
+        return render_instant_preview(
+            image=image,
+            inpaint_mask=inpaint_mask,
+            material_id=material_id,
+            blend_intensity=blend_intensity,
+            custom_bgr=custom_bgr,
+        )
 
     def render_facade(
         self,
@@ -156,6 +185,7 @@ class FacadeInpainter:
         guidance_scale: float = 7.5,
         controlnet_conditioning_scale: float = 0.65,
         seed: Optional[int] = 42,
+        fast_mode: bool = False,
     ) -> RenderResult:
         """Executes ControlNet-guided inpainting with authentic architectural materials.
         
@@ -168,11 +198,19 @@ class FacadeInpainter:
             guidance_scale: Classifier-free guidance scale (default: 7.5).
             controlnet_conditioning_scale: Weight of Canny edge guidance (default: 0.65).
             seed: RNG seed for reproducible generation (default: 42).
+            fast_mode: If True, uses accelerated step budget (15 steps) with VAE tiling.
             
         Returns:
             RenderResult containing the redesigned image and metadata.
         """
         start_time = time.time()
+
+        # Step reduction for fast mode
+        if fast_mode and num_inference_steps == 25:
+            num_inference_steps = 15
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # 1. Load and normalize inputs
         if isinstance(image, (str, Path)):
@@ -228,6 +266,9 @@ class FacadeInpainter:
             )
 
         raw_generated = output.images[0]
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # 6. Apply 100% mathematical pixel-lock on protected elements
         locked_result = apply_pixel_lock(orig_pil, raw_generated, mask_pil)

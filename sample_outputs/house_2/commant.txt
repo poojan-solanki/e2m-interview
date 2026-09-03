@@ -1,0 +1,1 @@
+uv run python backend/demo_render.py --image ".\samples\image copy 3.png" --material wpc_panels --style "large format matte charcoal grey porcelain exterior facade panels" --control-scale 0.5 --steps 15
