@@ -4,11 +4,11 @@
 
 ## The essentials, right now
 
-- `main` is current and has everything (Phases 1–4). No branch switching needed.
-- `uv sync && uv run pytest backend/tests/ -v` → expect **55 passed**.
-- `cd frontend && npm install && npm run dev` → `http://localhost:3000`.
+- `main` is current and has everything (Phases 1–4, plus a slice of Phase 5). No branch switching needed.
+- `uv sync && uv run pytest backend/tests/ -v` → expect **62 passed**.
+- `uv run uvicorn backend.api.main:app --reload --port 8000` (backend API) + `cd frontend && npm install && npm run dev` → `http://localhost:3000` (frontend), run together.
 - **Check for a GPU before assuming SAM 3 / neural rendering works**: `uv run python -c "import torch; print(torch.cuda.is_available())"`. If `False`, `backend/demo_segment.py` and neural `backend/demo_render.py` will hard-fail (not just run slowly) — the vendored `../sam3` package hardcodes `device="cuda"`. Use `demo_render.py --preview` (CPU, <50ms) instead when there's no GPU.
-- Next task is **Phase 5** (FastAPI backend, wiring the frontend to real endpoints) — `SESSION_HANDOVER.md` §9 has the specific recommended order and why.
+- Phase 5's `POST /api/boq` and `POST /api/render/preview` are done and wired to the frontend (both pure-CPU). `POST /api/segment` and `POST /api/render/neural` (GPU-only) plus Celery/WeasyPrint/DB are still not started — `SESSION_HANDOVER.md` §9 has the current status and recommended order.
 
 ## Don't re-break these
 

@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { getMaterial } from "@/data/materials";
+import { fetchRenderPreview } from "@/lib/api";
 import type { SampleHouse } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -20,10 +22,42 @@ export default function Step4Comparison({
   onNext: () => void;
 }) {
   const assignedMaterialIds = Array.from(new Set(Object.values(assignments)));
-  const renderedMaterialId =
-    assignedMaterialIds.find((id) => house.renderPreviews[id]) ?? "stone_cladding";
-  const afterSrc = house.renderPreviews[renderedMaterialId] ?? house.imageSrc;
+  const renderedMaterialId = assignedMaterialIds[0] ?? "stone_cladding";
   const material = getMaterial(renderedMaterialId);
+
+  // Live-rendered previews from POST /api/render/preview, cached per materialId
+  // so re-selecting an already-fetched material is instant.
+  const [previewCache, setPreviewCache] = useState<Record<string, string>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    if (previewCache[renderedMaterialId]) return;
+    const thisRequest = ++requestId.current;
+    // setState calls live inside the promise chain (not synchronously in the effect
+    // body) so each is a reaction to the fetch's lifecycle, not a render-time derivation.
+    Promise.resolve()
+      .then(() => {
+        if (requestId.current !== thisRequest) return;
+        setPreviewLoading(true);
+        setPreviewError(false);
+      })
+      .then(() => fetchRenderPreview(house.id, renderedMaterialId))
+      .then(({ imageDataUri }) => {
+        if (requestId.current !== thisRequest) return;
+        setPreviewCache((cache) => ({ ...cache, [renderedMaterialId]: imageDataUri }));
+      })
+      .catch(() => {
+        if (requestId.current === thisRequest) setPreviewError(true);
+      })
+      .finally(() => {
+        if (requestId.current === thisRequest) setPreviewLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [house.id, renderedMaterialId]);
+
+  const afterSrc = previewCache[renderedMaterialId] ?? house.imageSrc;
 
   const assignedZoneCount = Object.values(assignments).filter((id) => id === renderedMaterialId).length;
 
@@ -95,6 +129,22 @@ export default function Step4Comparison({
               </div>
             }
           />
+        )}
+
+        {activeTab === "instant" && previewLoading && !previewCache[renderedMaterialId] && (
+          <div className="z-30 absolute inset-0 flex items-center justify-center bg-[#05070a]/45 backdrop-blur-[2px]">
+            <div className="py-2.5 px-5 rounded-full bg-gradient-to-br from-[#161920]/90 to-[#0e1015]/85 backdrop-blur-md border border-white/20 text-[12px] text-text-muted">
+              Rendering {material.shortName.toLowerCase()} preview&hellip;
+            </div>
+          </div>
+        )}
+
+        {activeTab === "instant" && previewError && (
+          <div className="z-30 absolute inset-0 flex items-center justify-center bg-[#05070a]/45 backdrop-blur-[2px]">
+            <div className="py-2.5 px-5 rounded-full bg-gradient-to-br from-red-500/20 to-red-500/10 backdrop-blur-md border border-red-500/30 text-[12px] text-red-300">
+              Couldn&apos;t reach the render backend &mdash; showing the original photo.
+            </div>
+          </div>
         )}
 
         <div className="z-20 font-display absolute top-5 left-5 py-2 px-4 rounded-[11px] bg-gradient-to-br from-[#161920]/85 to-[#0e1015]/72 backdrop-blur-md border border-white/20 text-[11px] font-semibold tracking-[0.06em] text-text shadow-[0_8px_20px_rgba(0,0,0,0.35)] pointer-events-none">

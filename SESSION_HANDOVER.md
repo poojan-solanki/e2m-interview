@@ -229,19 +229,28 @@ cd frontend && npm run dev
 
 ---
 
-## 9. What Remains — Phase 5, and the recommended path
+## 9. Phase 5 — status and what remains
 
 Per `IMPLEMENTATION_PLAN.md`, Phase 5 is: FastAPI REST endpoints, Celery+Redis async task queue, WeasyPrint PDF generation, DB persistence — replacing the frontend's embedded real-but-static data with live backend calls.
 
-**Recommendation discussed and agreed this session** (given the original time pressure — re-evaluate if circumstances changed): **don't build the full Phase 5 as originally scoped in one shot.** Specifically:
+**Recommendation agreed in an earlier session** (given the original time pressure — re-evaluate if circumstances changed): don't build the full Phase 5 as originally scoped in one shot. Skip Celery/Redis and WeasyPrint/DB until the GPU-dependent endpoints are proven; build plain synchronous FastAPI endpoints first, ordered by how testable they are on a non-GPU machine.
 
-1. **Skip Celery/Redis initially.** Build plain synchronous FastAPI endpoints first. Async task queuing only matters once the underlying GPU-dependent endpoints are proven to actually work — building queue infrastructure around an unverified pipeline is backwards.
-2. **Endpoints to build, in order of how testable they are on a non-GPU machine:**
-   - `POST /api/boq` — wraps `boq_calculator.py` directly. Pure CPU, fully testable anywhere, do this first.
-   - `POST /api/render/preview` — wraps `instant_preview.py`. Also pure CPU, fully testable anywhere.
-   - `POST /api/segment` — wraps the SAM 3 pipeline. **Only testable on the GPU machine.**
-   - `POST /api/render/neural` — wraps `inpainter.py`. **Only testable on the GPU machine.**
-3. **Wire the frontend's mock BoQ math and static instant-preview images to the real `/api/boq` and `/api/render/preview` endpoints first** — that's the part provable end-to-end right now, on any machine.
-4. **Defer WeasyPrint PDF export and the DB layer** until the GPU-dependent endpoints are proven — `window.print()` already covers "downloadable report" adequately for now.
+### Done this session (on the RTX 3050 GPU machine — GPU confirmed working end-to-end first: SAM 3 segmentation and the neural ControlNet render both ran successfully, ~360s for a 20-step render)
 
-If you're a fresh Claude session picking this up: start with step 2's first two endpoints, verify them the same way Phase 4 was verified (actually call them, don't just trust that the code compiles), then wire the frontend to them before touching anything GPU-dependent.
+- **`POST /api/boq`** — wraps `backend/engine/boq_calculator.py` directly. Pure CPU.
+- **`POST /api/render/preview`** — wraps `backend/renderer/instant_preview.py`. Pure CPU, works for all 7 catalog materials (not just the 4 that used to be precomputed).
+- New backend structure: `backend/api/main.py` (FastAPI app + CORS for `localhost:3000`), `backend/api/schemas.py` (Pydantic models with camelCase aliases matching `frontend/src/types/index.ts` field-for-field), `backend/api/routes/{boq,render}.py`.
+- New git-tracked backend asset pair: `backend/assets/house1/source.jpg` + `inpaint_mask.png` (1600×1200, matching `frontend/public/samples/house1-before.jpg` exactly). **Why these exist**: `render_instant_preview()` needs an image + matching inpaint mask, but Sample House 1's real source photo and segmentation output were never committed (`output/` is gitignored as ephemeral; the source photo itself is caught by the `samples/*copy*` rule — both correctly, per §4). Regenerated the segmentation for `samples/image copy 2.png` this session (confirmed 87 zones — matches the original), resized the resulting mask 2048×1536 → 1600×1200 (same 4:3 aspect ratio, plain resize, no crop math), and committed both files so a fresh clone doesn't need a GPU to run `/api/render/preview` for the one existing sample house. `backend/api/routes/render.py`'s `HOUSE_ASSETS` dict maps a `houseId` (must match `SampleHouse.id`, e.g. `"house-1"`) to this asset pair — add one entry per future sample house.
+- New tests: `backend/tests/test_api.py` (7 cases, `fastapi.testclient.TestClient`, all pure-CPU) — full suite is now **62 passed**. Added `httpx` to `pyproject.toml` (required for `TestClient`, was previously absent).
+- Frontend wired to both endpoints: `frontend/src/lib/api.ts` (`fetchBoQ`, `fetchRenderPreview`), `frontend/.env.local` (gitignored, `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`). `Step5BoQ.tsx` now fetches real BoQ numbers (debounced 300ms on rate-override edits) instead of the client-side TS port; `groupBoQItems()` (pure display grouping) still runs client-side on the fetched result. `Step4Comparison.tsx`'s "Instant Preview" tab now calls the live render endpoint (cached per materialId) instead of looking up the 4 precomputed static JPEGs.
+  - **Gotcha hit and fixed**: Next 16 ships `eslint-plugin-react-hooks` v7 with a new `react-hooks/set-state-in-effect` rule that errors on synchronous `setState` calls written directly in an effect body (including the classic `setLoading(true)` before a fetch, and resetting state in an early-return branch). Fix pattern used here: for a genuine async fetch, move the state-setting calls into the promise chain's callbacks (`.then()/.catch()/.finally()`) rather than calling them synchronously first; for "reset to empty when a prop implies emptiness," compute a derived value at render time instead of resetting via effect (see `Step5BoQ.tsx`'s `displaySummary`/`displayLoadError`). If you hit this rule again, don't just disable it — restructure per this pattern, since it's genuinely part of Next 16's new conventions (see `frontend/AGENTS.md`).
+- **Verified live in a real browser** (Playwright/chromium-cli — Claude in Chrome wasn't set up this session): drove the full 5-step wizard, assigned `vitrified_tiles` (not one of the old precomputed materials) to the 3 wall zones, confirmed zero console errors and zero failed/4xx/5xx network requests, and hand-verified the BoQ math against the UI (355.65 sqft × 1.1 wastage × ₹85 material + 355.65 × ₹35 labor + 5% contingency = ₹47,986 — exact match). Also independently confirmed the render endpoint visually with `wpc_panels` (a strong, obviously-different wood tone) since `vitrified_tiles`' grey palette happens to look subtle against this particular raw-concrete photo at a glance — the texture/grout-grid is there on close inspection, it's just a low-contrast material choice for this photo, not a bug.
+
+### Still remaining
+
+- `POST /api/segment` — wraps the SAM 3 pipeline. **Only testable on a GPU machine.**
+- `POST /api/render/neural` — wraps `inpainter.py`. **Only testable on a GPU machine, and slow (~360s for 20 steps on the RTX 3050 laptop this session ran on) — build the Celery/Redis async queue around this one, not before.**
+- WeasyPrint PDF export and the DB layer — still deferred; `window.print()` still adequately covers "downloadable report" for now.
+- Only Sample House 1 has backend assets (`backend/assets/house1/`). A second sample house needs the same treatment: segment its source photo, resize the mask to match the served JPEG's dimensions, commit both, add a `HOUSE_ASSETS` entry.
+
+Run both servers together for local dev: `uv run uvicorn backend.api.main:app --reload --port 8000` and `cd frontend && npm run dev` (in separate terminals). The frontend's `NEXT_PUBLIC_API_BASE_URL` env var (default `http://localhost:8000`) must match wherever the API is actually running.

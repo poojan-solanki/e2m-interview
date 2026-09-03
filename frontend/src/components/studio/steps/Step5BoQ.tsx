@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, Lock } from "lucide-react";
-import { getMaterial } from "@/data/materials";
-import { calculateBoQ, calculateLineItem, formatINR, groupBoQItems } from "@/lib/boq";
-import type { RateOverride, SampleHouse } from "@/types";
+import { fetchBoQ } from "@/lib/api";
+import { formatINR, groupBoQItems } from "@/lib/boq";
+import type { BoQSummary, RateOverride, SampleHouse } from "@/types";
 import ReportModal from "../report/ReportModal";
 
 const ZONE_COLORS: Record<string, string> = {
@@ -13,6 +13,16 @@ const ZONE_COLORS: Record<string, string> = {
   balcony_railing: "#8b5cf6",
   roof_parapet: "#f43f5e",
   window: "#3b82f6",
+};
+
+const EMPTY_SUMMARY: BoQSummary = {
+  items: [],
+  totalMaterialCostInr: 0,
+  totalLaborCostInr: 0,
+  subtotalInr: 0,
+  contingencyPct: 5,
+  contingencyAmountInr: 0,
+  grandTotalInr: 0,
 };
 
 export default function Step5BoQ({
@@ -27,15 +37,52 @@ export default function Step5BoQ({
   onRateOverride: (zoneIds: string[], override: RateOverride) => void;
 }) {
   const [reportOpen, setReportOpen] = useState(false);
+  const [summary, setSummary] = useState<BoQSummary>(EMPTY_SUMMARY);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
-  const summary = useMemo(() => {
-    const items = house.zones
-      .filter((z) => !z.isProtected && assignments[z.id])
-      .map((z) => calculateLineItem(z, getMaterial(assignments[z.id]), rateOverrides[z.id]));
-    return calculateBoQ(items);
-  }, [house.zones, assignments, rateOverrides]);
+  const assignedZoneCount = useMemo(
+    () => house.zones.filter((z) => !z.isProtected && assignments[z.id]).length,
+    [house.zones, assignments]
+  );
 
-  const groups = useMemo(() => groupBoQItems(summary.items, house.zones), [summary.items, house.zones]);
+  // Debounced: rate override inputs fire on every keystroke, and the BoQ math
+  // now lives server-side (backend/engine/boq_calculator.py is the source of truth).
+  // No zones assigned is handled as derived state below rather than reset here,
+  // so this effect never needs to setState synchronously on its own body.
+  useEffect(() => {
+    if (assignedZoneCount === 0) {
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetchBoQ(house.zones, assignments, rateOverrides)
+        .then((result) => {
+          if (cancelled) return;
+          setSummary(result);
+          setLoadError(false);
+        })
+        .catch(() => {
+          if (!cancelled) setLoadError(true);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [house.zones, assignments, rateOverrides, assignedZoneCount]);
+
+  const displaySummary = assignedZoneCount === 0 ? EMPTY_SUMMARY : summary;
+  const displayLoadError = assignedZoneCount > 0 && loadError;
+
+  const groups = useMemo(
+    () => groupBoQItems(displaySummary.items, house.zones),
+    [displaySummary.items, house.zones]
+  );
 
   const protectedWindowCount = house.zones.filter((z) => z.isProtected).length;
 
@@ -51,13 +98,24 @@ export default function Step5BoQ({
             <div className="text-[12px] text-[#64748b] mt-1">Ahmedabad market rates &middot; editable below</div>
           </div>
 
-          {summary.items.length === 0 ? (
+          {displayLoadError && (
+            <div className="rounded-2xl bg-gradient-to-br from-red-500/10 to-red-500/3 backdrop-blur-md border border-red-500/24 p-4 text-[12px] text-red-300">
+              Couldn&apos;t reach the pricing backend. Make sure the API server is running (
+              <code className="text-red-200">uv run uvicorn backend.api.main:app --reload --port 8000</code>).
+            </div>
+          )}
+
+          {displaySummary.items.length === 0 ? (
             <div className="rounded-[22px] bg-gradient-to-br from-white/[0.075] to-white/2 backdrop-blur-2xl border border-white/12 p-10 text-center text-[13px] text-text-muted">
               No zones have a material assigned yet. Go back to Materials and assign at least one zone to
               see costs here.
             </div>
           ) : (
-            <div className="rounded-[22px] bg-gradient-to-br from-white/[0.075] to-white/2 backdrop-blur-2xl backdrop-saturate-150 border border-white/12 shadow-[0_18px_48px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.09)] p-6.5">
+            <div
+              className={`rounded-[22px] bg-gradient-to-br from-white/[0.075] to-white/2 backdrop-blur-2xl backdrop-saturate-150 border border-white/12 shadow-[0_18px_48px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.09)] p-6.5 transition-opacity ${
+                loading ? "opacity-60" : "opacity-100"
+              }`}
+            >
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="text-left">
@@ -140,15 +198,15 @@ export default function Step5BoQ({
 
             <div className="flex justify-between mb-3 text-[13px]">
               <span className="text-text-muted">Material subtotal</span>
-              <span className="text-[#e2e8f0]">{formatINR(summary.totalMaterialCostInr)}</span>
+              <span className="text-[#e2e8f0]">{formatINR(displaySummary.totalMaterialCostInr)}</span>
             </div>
             <div className="flex justify-between mb-3 text-[13px]">
               <span className="text-text-muted">Labor subtotal</span>
-              <span className="text-[#e2e8f0]">{formatINR(summary.totalLaborCostInr)}</span>
+              <span className="text-[#e2e8f0]">{formatINR(displaySummary.totalLaborCostInr)}</span>
             </div>
             <div className="flex justify-between mb-4.5 text-[13px]">
-              <span className="text-text-muted">Contingency ({summary.contingencyPct}%)</span>
-              <span className="text-[#e2e8f0]">{formatINR(summary.contingencyAmountInr)}</span>
+              <span className="text-text-muted">Contingency ({displaySummary.contingencyPct}%)</span>
+              <span className="text-[#e2e8f0]">{formatINR(displaySummary.contingencyAmountInr)}</span>
             </div>
 
             <div className="h-px bg-white/10 mb-4.5" />
@@ -159,12 +217,12 @@ export default function Step5BoQ({
               </span>
             </div>
             <div className="font-display text-[32px] font-bold mb-5.5 bg-gradient-to-br from-white to-[#e8d5b7] bg-clip-text text-transparent">
-              {formatINR(summary.grandTotalInr)}
+              {formatINR(displaySummary.grandTotalInr)}
             </div>
 
             <button
               type="button"
-              disabled={summary.items.length === 0}
+              disabled={displaySummary.items.length === 0}
               onClick={() => setReportOpen(true)}
               className="w-full py-3.75 rounded-[14px] border border-white/25 bg-gradient-to-br from-[#ddc4a1] via-accent to-[#b8956d] text-[#241a0c] text-[14px] font-semibold shadow-[0_14px_32px_rgba(200,168,130,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] flex items-center justify-center gap-2 disabled:opacity-40"
             >
@@ -181,7 +239,7 @@ export default function Step5BoQ({
       </div>
 
       {reportOpen && (
-        <ReportModal house={house} summary={summary} groups={groups} onClose={() => setReportOpen(false)} />
+        <ReportModal house={house} summary={displaySummary} groups={groups} onClose={() => setReportOpen(false)} />
       )}
     </div>
   );
