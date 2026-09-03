@@ -78,4 +78,5 @@ samples/*Copy*
 /SESSION_HANDOVER.md
 /samples/
 images for claude
-backend\skills-lock.json
+skills-lock.json
+.agents
