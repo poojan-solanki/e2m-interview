@@ -164,7 +164,7 @@ export default function Step5BoQ({
                         </td>
                         <td className="py-4 px-2 text-[13px] text-[#e2e8f0]">{group.materialName}</td>
                         <td className="py-4 px-2 text-[13px] text-[#e2e8f0]">
-                          {group.netArea.toFixed(1)} {group.unit === "Rft" ? "Rft" : "sq ft"}
+                          {group.netArea.toFixed(2)} {group.unit === "Rft" ? "Rft" : "sq ft"}
                         </td>
                         <td className="py-4 px-2 text-[13px]">
                           <input

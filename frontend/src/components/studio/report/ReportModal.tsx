@@ -136,7 +136,7 @@ export default function ReportModal({
                   <td className="py-2.75 text-[13px] text-[#1e293b]">{group.displayName}</td>
                   <td className="py-2.75 text-[13px] text-[#1e293b]">{group.materialName}</td>
                   <td className="py-2.75 text-[13px] text-[#1e293b]">
-                    {group.netArea.toFixed(1)} {group.unit === "Rft" ? "Rft" : "sq ft"}
+                    {group.netArea.toFixed(2)} {group.unit === "Rft" ? "Rft" : "sq ft"}
                   </td>
                   <td className="py-2.75 text-[13px] text-[#1e293b] text-right">{formatINR(group.lineTotalInr)}</td>
                 </tr>
